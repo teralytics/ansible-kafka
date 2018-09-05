@@ -1,0 +1,91 @@
+---
+- name: "stop kafka"
+  service:
+    name: kafka
+    enabled: no
+    state: stopped
+  become: yes
+  ignore_errors: True
+
+- name: "Remove link /usr/local/kafka to the right version"
+  file:
+    path: /usr/local/kafka
+    state: absent
+  become: yes
+
+- name: "Remove upstart config"
+  file:
+    path: /etc/init/kafka.conf
+    state: absent
+  become: yes
+  when: ansible_service_mgr != 'systemd'
+
+- name: "Remove systemd config"
+  file:
+    path: /etc/systemd/system/kafka.service
+    state: absent
+  become: yes
+  when: ansible_service_mgr == 'systemd'
+
+- name: "Remove symlink kafka_conf_dir to /usr/local/kafka/config"
+  file:
+    path: "{{ item }}"
+    state: absent
+  become: yes
+  with_items:
+    - /usr/local/kafka/logs
+    - /usr/local/kafka/config
+    - /etc/profile.d/Z99-kafka.sh
+
+- name: "Remove kafka directories"
+  file:
+    path: "{{ item }}"
+    state: absent
+  become: yes
+  with_items:
+    - "{{ kafka_data_dir }}"
+    - "{{ kafka_log_dir }}"
+    - "{{ kafka_conf_dir }}"
+    - "{{ kafka_bin_tmp }}"
+
+- name: "Remove soft nofile limit for kafka system user"
+  lineinfile:
+    path: /etc/security/limits.conf
+    regexp: "^[ \t]*{{ kafka_user }} soft nofile .+[ \t]*$"
+    line: "kafka soft nofile {{ nofiles_limit }}"
+    state: absent
+  become: yes
+
+- name: "Remove hard nofile limit for kafka system user"
+  lineinfile:
+    path: /etc/security/limits.conf
+    regexp: "^[ \t]*{{ kafka_user }} hard nofile .+[ \t]*$"
+    line: "kafka hard nofile {{ nofiles_limit }}"
+    state: absent
+  become: yes
+
+- name: "Remove 'session required pam_limits.so' to /etc/pam.d/common-session"
+  lineinfile:
+    path: /etc/pam.d/common-session
+    regexp: "^[ \t]*session required pam_limits\\.so[ \t]*$"
+    line: "session required pam_limits.so"
+    state: absent
+  become: yes
+
+- name: "Remove kafka system group"
+  group:
+    name: kafka
+    state: absent
+  become: yes
+
+- name: "Remove kafka system user"
+  user:
+    name: kafka
+    state: absent
+  become: yes
+
+- name: "Remove downloaded kafka archive"
+  file:
+    path: /usr/local/kafka_{{ kafka_scala_version }}-{{ kafka_version }}
+    state: absent
+  become: yes
